@@ -72,14 +72,49 @@ export default function App() {
       }
     } catch (err: any) {
       console.error("Authentication failed:", err);
+      const errCode = err?.code || "";
+      const customMessage = errCode 
+        ? `Google Authentication failed (${errCode}). Please check your pop-up blocker and try using Sandbox Demo mode.`
+        : "Google Authentication failed. Please check your network & pop-up blocker.";
+      
       if (isIframe) {
-        setAppError("Google Authentication failed. Because this app is running in an iframe preview, browsers block popup sign-ins & third-party cookies by default. Click 'Open in New Tab' to sign in instantly.");
+        setAppError(`Google Authentication failed. Because this app is running in an iframe preview, browsers block popup sign-ins & third-party cookies by default. Click 'Open in New Tab' or try Sandbox Demo mode below.`);
       } else {
-        setAppError("Google Authentication failed. Please check your network and pop-up blocker.");
+        setAppError(customMessage);
       }
     } finally {
       setIsLoggingIn(false);
     }
+  };
+
+  const handleSandboxBypassLogin = () => {
+    setAppError(null);
+    setIsLoggingIn(true);
+    setTimeout(() => {
+      const mockUser = {
+        uid: "sandbox_henry",
+        displayName: "HENRY OMOTAYO ADETUNJI",
+        email: "taican4real@gmail.com",
+        emailVerified: true,
+        isAnonymous: false,
+        providerData: []
+      } as any;
+      
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("sandbox_user", JSON.stringify(mockUser));
+          localStorage.setItem("sandbox_token", "sandbox_mock_token_abcdef123y");
+        }
+      } catch (e) {
+        console.error(e);
+      }
+
+      setUser(mockUser);
+      setToken("sandbox_mock_token_abcdef123y");
+      setNeedsAuth(false);
+      setIsLoggingIn(false);
+      setAiSuccessMessage("Sandbox Demonstration Mode activated. Signed in as Henry Adetunji.");
+    }, 450);
   };
 
   const handleLogout = async () => {
@@ -87,6 +122,14 @@ export default function App() {
     setToken(null);
     setUser(null);
     setExportUrl(null);
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("sandbox_user");
+        localStorage.removeItem("sandbox_token");
+      }
+    } catch (e) {
+      console.error(e);
+    }
     await firebaseLogout();
   };
 
@@ -233,6 +276,17 @@ export default function App() {
               </button>
             )}
 
+            {!user && (
+              <button
+                type="button"
+                onClick={handleSandboxBypassLogin}
+                className="flex items-center gap-1.5 bg-slate-900 border border-slate-700 hover:bg-slate-800 hover:border-slate-650 px-3 py-1.5 rounded-lg text-xs font-bold text-amber-550 group transition-all duration-200 cursor-pointer shadow-xs whitespace-nowrap"
+                title="Google login can be blocked by popups or dynamic domains. Click here to use a local sandbox tester account instantly."
+              >
+                <span>Demo Sandbox Login 🛡️</span>
+              </button>
+            )}
+
             <GsiSignInButton
               onSignIn={handleLogin}
               onLogout={handleLogout}
@@ -254,19 +308,32 @@ export default function App() {
               <div>
                 <span className="font-bold">Error encountered:</span> {appError}
                 {appError.includes("Google Authentication") && (
-                  <p className="mt-1.5 text-slate-600 leading-relaxed font-sans">
-                    💡 <strong>Browser Policy Details:</strong> Privacy and security sandboxing blocks authentication popups and cookie synchronization when a site is loaded inside a mock framework frame (like this preview pane). Clicking the <strong>Open in New Tab</strong> button launches this app directly in its own window where Google Sign-In is completely unrestricted.
-                  </p>
+                  <div className="mt-1.5 text-slate-650 leading-relaxed font-sans">
+                    <p>
+                      💡 <strong>Browser Policy / Domain Authorization Details:</strong> Privacy and security sandboxing blocks auth popups and cookie synchronization inside framing contexts. In addition, dynamically spawned preview environments require explicit manual authorization in Firebase.
+                    </p>
+                    <p className="mt-1 font-bold text-amber-800">
+                      👉 Recommend: Click the button on the right to Open in a New Tab, or use "Demo Sandbox Login" to test everything immediately without any registration configs!
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
             {appError.includes("Google Authentication") && (
-              <button
-                onClick={() => window.open(window.location.href, "_blank")}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-extrabold rounded-lg transition-all shadow-sm shrink-0 flex items-center gap-1.5 self-start md:self-center cursor-pointer text-center"
-              >
-                <span>Open in New Tab ↗</span>
-              </button>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                <button
+                  onClick={handleSandboxBypassLogin}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-amber-400 font-extrabold rounded-lg transition-all shadow-sm cursor-pointer text-center text-xs"
+                >
+                  Demo Sandbox Login 🛡️
+                </button>
+                <button
+                  onClick={() => window.open(window.location.href, "_blank")}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-extrabold rounded-lg transition-all shadow-sm shrink-0 flex items-center justify-center gap-1.5 cursor-pointer text-center text-xs"
+                >
+                  <span>Open in New Tab ↗</span>
+                </button>
+              </div>
             )}
           </div>
         )}
