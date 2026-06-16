@@ -517,6 +517,12 @@ export default function RubricSelector({ aiOutline, user, onLoginRequest }: Rubr
   // Filter for Graded state review list: "all" | "correct" | "incorrect"
   const [reviewFilter, setReviewFilter] = useState<"all" | "correct" | "incorrect">("all");
 
+  // Anti-Cheat Security States
+  const [tabSwitchCount, setTabSwitchCount] = useState<number>(0);
+  const [antiCheatViolated, setAntiCheatViolated] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showViolationModal, setShowViolationModal] = useState<boolean>(false);
+
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Dynamic augmentation with user's customized slides metadata if available
@@ -562,6 +568,96 @@ export default function RubricSelector({ aiOutline, user, onLoginRequest }: Rubr
     };
   }, [examState]);
 
+  // Anti-Cheat window event handlers
+  useEffect(() => {
+    if (examState !== "running") return;
+
+    const handleBlur = () => {
+      setTabSwitchCount((prev) => {
+        const next = prev + 1;
+        setToastMessage(`Security Alert: Focus lost! Tab switch detected (${next}/3)`);
+        
+        if (next >= 3) {
+          setAntiCheatViolated(true);
+          setToastMessage("INTEGRITY BREACH: Exam locked and automatically submitted.");
+          setShowViolationModal(false);
+          setTimeout(() => {
+            handleForceSubmit(next, true);
+          }, 1500);
+        } else {
+          setShowViolationModal(true);
+        }
+        return next;
+      });
+    };
+
+    const handleFocus = () => {
+      // Prompt when coming back if not violated
+      if (!antiCheatViolated) {
+        setToastMessage("Academic focus restored. Honor code active.");
+      }
+    };
+
+    const handleCopy = (e: ClipboardEvent) => {
+      e.preventDefault();
+      setToastMessage("Copying training questions is strictly disabled.");
+    };
+
+    const handlePaste = (e: ClipboardEvent) => {
+      e.preventDefault();
+      setToastMessage("Pasting content into options is disabled.");
+    };
+
+    const handleCut = (e: ClipboardEvent) => {
+      e.preventDefault();
+      setToastMessage("Cutting text is disabled during the exam.");
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      setToastMessage("Context menu / right-click is restricted by Anti-Cheat system.");
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent standard inspection keys and reload keys
+      if (e.key === "F12" || 
+          ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key?.toLowerCase() === "i") ||
+          ((e.metaKey || e.ctrlKey) && e.key?.toLowerCase() === "u")
+      ) {
+        e.preventDefault();
+        setToastMessage("Developer tools inspection is disabled.");
+      }
+    };
+
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("copy", handleCopy);
+    document.addEventListener("paste", handlePaste);
+    document.addEventListener("cut", handleCut);
+    document.addEventListener("contextmenu", handleContextMenu);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("copy", handleCopy);
+      document.removeEventListener("paste", handlePaste);
+      document.removeEventListener("cut", handleCut);
+      document.removeEventListener("contextmenu", handleContextMenu);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [examState, timeLeft, answers, tabSwitchCount, antiCheatViolated]);
+
+  // Toast auto-dismisser
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => {
+        setToastMessage(null);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
   const handleStartExam = () => {
     setAnswers({});
     setTimeLeft(3000);
@@ -571,9 +667,18 @@ export default function RubricSelector({ aiOutline, user, onLoginRequest }: Rubr
     setIsGraded(false);
     setShowConfirmSubmit(false);
     setSelectedCategoryId("collaboration");
+
+    // Reset Anti-Cheat metrics
+    setTabSwitchCount(0);
+    setAntiCheatViolated(false);
+    setToastMessage(null);
+    setShowViolationModal(false);
   };
 
-  const handleForceSubmit = async () => {
+  const handleForceSubmit = async (forcedTabSwitch?: number, forcedAntiCheat?: boolean) => {
+    const finalSwitches = forcedTabSwitch !== undefined ? forcedTabSwitch : tabSwitchCount;
+    const finalViolated = forcedAntiCheat !== undefined ? forcedAntiCheat : (tabSwitchCount >= 3 || antiCheatViolated);
+
     // Overrides timer & calculates remaining seconds
     const secondsWorked = 3000 - Math.max(0, timeLeft);
     setTimeUsed(secondsWorked);
@@ -596,7 +701,9 @@ export default function RubricSelector({ aiOutline, user, onLoginRequest }: Rubr
           user.email || "",
           computedScore,
           secondsWorked,
-          ansCount
+          ansCount,
+          finalSwitches,
+          finalViolated
         );
       } catch (err) {
         console.error("Failed to save participant score to Firestore:", err);
@@ -622,6 +729,12 @@ export default function RubricSelector({ aiOutline, user, onLoginRequest }: Rubr
     setIsGraded(false);
     setTimeLeft(3000);
     setShowConfirmSubmit(false);
+    
+    // Clear anti-cheat warnings
+    setTabSwitchCount(0);
+    setAntiCheatViolated(false);
+    setToastMessage(null);
+    setShowViolationModal(false);
   };
 
   const currentCategory =
@@ -862,6 +975,28 @@ export default function RubricSelector({ aiOutline, user, onLoginRequest }: Rubr
             <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between min-h-[560px]">
               <div>
                 
+                {/* Anti-Cheat System status header bar */}
+                <div className="mb-4 bg-slate-900 text-white rounded-xl p-3 flex items-center justify-between gap-3 text-[10px] border border-slate-800">
+                  <div className="flex items-center gap-1.5">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span className="font-extrabold tracking-wide uppercase text-slate-300">🛡️ Anti-Cheat Active</span>
+                  </div>
+                  <div className="flex items-center gap-2 font-mono">
+                    <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-bold tracking-tight ${
+                      tabSwitchCount === 0
+                        ? "bg-emerald-950 text-emerald-400 border border-emerald-900/40"
+                        : tabSwitchCount === 1
+                        ? "bg-amber-950 text-amber-400 border border-amber-900/40"
+                        : "bg-rose-950 text-rose-400 border border-rose-900/40"
+                    }`}>
+                      TAB SWITCHES: {tabSwitchCount} / 3
+                    </span>
+                  </div>
+                </div>
+
                 {/* Header indicators row */}
                 <div className="flex items-center justify-between gap-3 mb-4">
                   <div className="flex items-center gap-1.5">
@@ -1071,6 +1206,39 @@ export default function RubricSelector({ aiOutline, user, onLoginRequest }: Rubr
                     </div>
                   </div>
 
+                  {/* Anti-Cheat verification summary */}
+                  <div className={`mt-3 p-3 rounded-lg border text-left text-[11px] ${
+                    antiCheatViolated
+                      ? "bg-red-50 text-red-955 border-red-200"
+                      : tabSwitchCount > 0
+                      ? "bg-amber-50 text-amber-955 border-amber-200"
+                      : "bg-emerald-50 text-emerald-955 border-emerald-110"
+                  }`}>
+                    <div className="flex items-start gap-1.5 leading-relaxed">
+                      {antiCheatViolated ? (
+                        <>
+                          <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5 animate-bounce" />
+                          <div>
+                            <strong className="font-extrabold block text-xs uppercase text-red-900">Integrity Breach Flagged</strong>
+                            Automatic Lockout occurred due to <strong>{tabSwitchCount}</strong> tab-switches (Honor Code violation). This score remains flagged in records.
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                          <div>
+                            <strong className="font-extrabold block text-xs uppercase text-emerald-800">Honor Code Verified</strong>
+                            {tabSwitchCount === 0 ? (
+                              <span>Academic integrity verified. Perfect single-tab focus maintained (0 switches).</span>
+                            ) : (
+                              <span>Calibration submitted with <strong>{tabSwitchCount}</strong> tab-switch alert{tabSwitchCount > 1 ? "s" : ""}. Stay focused on the test interface in the future.</span>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Leaderboard sync feedback */}
                   {!user ? (
                     <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-[10.5px] text-amber-900 text-left space-y-2 font-sans leading-relaxed">
@@ -1222,6 +1390,45 @@ export default function RubricSelector({ aiOutline, user, onLoginRequest }: Rubr
         </div>
 
       </div>
+
+      {/* Anti-Cheat Focus Recovery Modal Overlay */}
+      {showViolationModal && examState === "running" && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 select-none">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 max-w-sm w-full text-center space-y-4 shadow-2xl animate-in fade-in zoom-in duration-200">
+            <div className="w-12 h-12 bg-rose-50 text-rose-600 border border-rose-100 rounded-full flex items-center justify-center mx-auto shadow-sm">
+              <AlertTriangle className="w-5 h-5 animate-pulse" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-sm font-black text-rose-950 uppercase tracking-wider">
+                Security Alert: Focus Lost!
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed font-sans">
+                You clicked away from the MCE Calibration workspace. Left-window switches are strictly monitored to ensure academic integrity.
+              </p>
+              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-205 mt-2">
+                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-tight">Active Switch Alerts</span>
+                <span className="text-lg font-black text-rose-600 font-mono">{tabSwitchCount} / 3</span>
+                <span className="text-[9px] text-slate-400 block mt-1">At 3 focus switches, your exam locks and is flagged for manual audit.</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowViolationModal(false)}
+              className="w-full py-2 bg-gradient-to-r from-rose-600 to-indigo-750 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+            >
+              Understand & Resume Calibration
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Floating security alerts notifications toast */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 bg-slate-900 border border-slate-800 text-white text-[11px] font-extrabold px-4 py-3 rounded-xl shadow-2xl z-50 animate-bounce flex items-center gap-2 max-w-sm">
+          <div className="w-5 h-5 bg-indigo-650 rounded-lg flex items-center justify-center text-white text-[10px] shrink-0">🛡️</div>
+          <span className="font-sans font-medium text-slate-100">{toastMessage}</span>
+        </div>
+      )}
 
     </div>
   );

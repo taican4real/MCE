@@ -14,8 +14,8 @@ import AdminDashboard from "./components/AdminDashboard";
 export default function App() {
   const [settings, setSettings] = useState<CustomPresentationSettings>({
     title: "MCE 21st Century Learning Design Training Guide",
-    presenterName: "MCE Lead Trainer",
-    institution: "National Professional Learning Hub",
+    presenterName: "HENRY OMOTAYO ADETUNJI.",
+    institution: "DEXTER ACADEMY.",
     trainingFocus: "General K-12 Classrooms",
     slideTone: "Inspiring & Academic",
     customContext: "Provide practical K12 suggestions.",

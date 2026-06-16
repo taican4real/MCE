@@ -104,7 +104,7 @@ export default function SlideViewer({
       {/* Primary visual canvas simulating the Google Slide */}
       <div
         id="presentation-slide-stage"
-        className={`aspect-[16/9] w-full rounded-2xl p-6 md:p-8 lg:p-12 shadow-xl border relative flex flex-col justify-between overflow-hidden transition-all duration-300 ${activeTheme.bgColor} ${activeTheme.textColor}`}
+        className={`w-full rounded-2xl p-5 md:p-8 lg:p-12 shadow-xl border relative flex flex-col justify-between transition-all duration-300 aspect-auto md:aspect-[16/9] min-h-[440px] md:min-h-0 overflow-y-auto md:overflow-hidden ${activeTheme.bgColor} ${activeTheme.textColor}`}
       >
         {/* Subtle slide watermark/theme element */}
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/[0.03] rounded-full filter blur-xl transform translate-x-10 -translate-y-10" />

@@ -44,6 +44,8 @@ export interface ParticipantScore {
   score: number;
   timeUsed: number;
   answeredCount: number;
+  tabSwitchCount: number;
+  antiCheatViolated: boolean;
   updatedAt: any;
 }
 
@@ -75,7 +77,9 @@ export async function saveParticipantScore(
   email: string,
   score: number,
   timeUsed: number,
-  answeredCount: number
+  answeredCount: number,
+  tabSwitchCount: number,
+  antiCheatViolated: boolean
 ): Promise<void> {
   const path = `participants/${uid}`;
   try {
@@ -87,6 +91,8 @@ export async function saveParticipantScore(
       score,
       timeUsed,
       answeredCount,
+      tabSwitchCount,
+      antiCheatViolated,
       updatedAt: serverTimestamp()
     });
   } catch (error) {
@@ -112,6 +118,8 @@ export async function fetchParticipantsList(): Promise<ParticipantScore[]> {
         score: Number(data.score),
         timeUsed: Number(data.timeUsed),
         answeredCount: Number(data.answeredCount),
+        tabSwitchCount: Number(data.tabSwitchCount || 0),
+        antiCheatViolated: Boolean(data.antiCheatViolated || false),
         updatedAt: data.updatedAt
       });
     });

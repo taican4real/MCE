@@ -332,7 +332,23 @@ export default function AdminDashboard({ user, onLoginRequest }: AdminDashboardP
                                       <span className="text-[8px] bg-blue-105 border border-blue-200 text-blue-700 font-extrabold px-1.5 py-0.2 rounded uppercase font-mono">Top Score</span>
                                     )}
                                   </span>
-                                  <span className="text-[10px] text-slate-450 mt-0.5">{p.email}</span>
+                                  <div className="flex flex-wrap items-center gap-x-1.5 mt-0.5">
+                                    <span className="text-[10px] text-slate-450">{p.email}</span>
+                                    <span className="text-slate-300 text-[10px]">•</span>
+                                    {p.antiCheatViolated ? (
+                                      <span className="text-[9px] font-bold px-1.5 py-0.1 rounded bg-rose-50 text-rose-650 border border-rose-150 uppercase tracking-tight">
+                                        ⚠️ Cheat Lockout ({p.tabSwitchCount} tab switches)
+                                      </span>
+                                    ) : p.tabSwitchCount > 0 ? (
+                                      <span className="text-[9px] font-bold px-1.5 py-0.1 rounded bg-amber-50 text-amber-800 border border-amber-150 uppercase tracking-tight">
+                                        🛡️ Switched {p.tabSwitchCount}x
+                                      </span>
+                                    ) : (
+                                      <span className="text-[9px] font-bold px-1.5 py-0.1 rounded bg-emerald-55 text-emerald-800 border border-emerald-150 uppercase tracking-tight">
+                                        🛡️ Pure Focus (0x)
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </td>
                               <td className="py-3.5 px-4 font-mono font-bold">

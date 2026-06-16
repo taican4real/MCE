@@ -29,13 +29,21 @@
           "type": "integer",
           "description": "The number of answered cases."
         },
+        "tabSwitchCount": {
+          "type": "integer",
+          "description": "The number of times the user switched tabs or clicked away during the calibration test."
+        },
+        "antiCheatViolated": {
+          "type": "boolean",
+          "description": "True if the user crossed the allowed tab-switching limit."
+        },
         "updatedAt": {
           "type": "string",
           "format": "date-time",
           "description": "Server timestamp of completion."
         }
       },
-      "required": ["uid", "displayName", "email", "score", "timeUsed", "answeredCount", "updatedAt"]
+      "required": ["uid", "displayName", "email", "score", "timeUsed", "answeredCount", "tabSwitchCount", "antiCheatViolated", "updatedAt"]
     }
   },
   "firestore": {
