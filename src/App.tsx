@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { User } from "firebase/auth";
-import { initAuth, googleSignIn, logout as firebaseLogout } from "./lib/firebase";
-import { exportToGoogleSlides } from "./lib/slidesExporter";
+import { logout as firebaseLogout } from "./lib/firebase";
 import { mceRubrics } from "./data/mceData";
 import { CustomPresentationSettings, ThemeId, AIOutline } from "./types";
-import GsiSignInButton from "./components/GsiSignInButton";
+import RegistrationGate from "./components/RegistrationGate";
 import RubricSelector from "./components/RubricSelector";
 import SlideViewer from "./components/SlideViewer";
 import SlideCustomizer from "./components/SlideCustomizer";
-import { Sparkles, CheckCircle, ExternalLink, AlertTriangle, BookOpen, Presentation, RefreshCw, Users } from "lucide-react";
+import { Sparkles, CheckCircle, ExternalLink, AlertTriangle, BookOpen, Presentation, RefreshCw, Users, ShieldAlert, Key } from "lucide-react";
 import AdminDashboard from "./components/AdminDashboard";
 
 export default function App() {
@@ -28,7 +27,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<"slides" | "rubrics" | "admin">("slides");
 
   // Authentication State
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
   const [needsAuth, setNeedsAuth] = useState<boolean>(true);
@@ -44,78 +43,26 @@ export default function App() {
   const isIframe = typeof window !== "undefined" && window.self !== window.top;
 
   useEffect(() => {
-    // Check if user is signed in on load
-    const unsubscribe = initAuth(
-      (currentUser, accessToken) => {
-        setUser(currentUser);
-        setToken(accessToken);
-        setNeedsAuth(false);
-      },
-      () => {
-        setUser(null);
-        setToken(null);
-        setNeedsAuth(true);
-      }
-    );
-    return () => unsubscribe();
-  }, []);
-
-  const handleLogin = async () => {
-    setIsLoggingIn(true);
-    setAppError(null);
+    // Restore custom registration session from LocalStorage
     try {
-      const result = await googleSignIn();
-      if (result) {
-        setToken(result.accessToken);
-        setUser(result.user);
-        setNeedsAuth(false);
-      }
-    } catch (err: any) {
-      console.error("Authentication failed:", err);
-      const errCode = err?.code || "";
-      const customMessage = errCode 
-        ? `Google Authentication failed (${errCode}). Please check your pop-up blocker and try using Sandbox Demo mode.`
-        : "Google Authentication failed. Please check your network & pop-up blocker.";
-      
-      if (isIframe) {
-        setAppError(`Google Authentication failed. Because this app is running in an iframe preview, browsers block popup sign-ins & third-party cookies by default. Click 'Open in New Tab' or try Sandbox Demo mode below.`);
-      } else {
-        setAppError(customMessage);
-      }
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
-
-  const handleSandboxBypassLogin = () => {
-    setAppError(null);
-    setIsLoggingIn(true);
-    setTimeout(() => {
-      const mockUser = {
-        uid: "sandbox_henry",
-        displayName: "HENRY OMOTAYO ADETUNJI",
-        email: "taican4real@gmail.com",
-        emailVerified: true,
-        isAnonymous: false,
-        providerData: []
-      } as any;
-      
-      try {
-        if (typeof window !== "undefined") {
-          localStorage.setItem("sandbox_user", JSON.stringify(mockUser));
-          localStorage.setItem("sandbox_token", "sandbox_mock_token_abcdef123y");
+      if (typeof window !== "undefined") {
+        const savedUser = localStorage.getItem("sandbox_user");
+        const savedToken = localStorage.getItem("sandbox_token");
+        if (savedUser) {
+          const parsed = JSON.parse(savedUser);
+          setUser(parsed);
+          setToken(savedToken || `token_${parsed.uid}`);
+          setNeedsAuth(false);
+        } else {
+          setUser(null);
+          setToken(null);
+          setNeedsAuth(true);
         }
-      } catch (e) {
-        console.error(e);
       }
-
-      setUser(mockUser);
-      setToken("sandbox_mock_token_abcdef123y");
-      setNeedsAuth(false);
-      setIsLoggingIn(false);
-      setAiSuccessMessage("Sandbox Demonstration Mode activated. Signed in as Henry Adetunji.");
-    }, 450);
-  };
+    } catch (e) {
+      console.error("Failed to restore registration session:", e);
+    }
+  }, []);
 
   const handleLogout = async () => {
     setAppError(null);
@@ -130,7 +77,6 @@ export default function App() {
     } catch (e) {
       console.error(e);
     }
-    await firebaseLogout();
   };
 
   // call our server-side API to customize outlines & notes using Gemini 3.5
@@ -175,39 +121,101 @@ export default function App() {
     }
   };
 
-  // Publish to real Google Slides
-  const handleExportToGoogleSlides = async () => {
-    if (!token) {
-      setAppError("Please connect your Google Account first.");
-      return;
-    }
+  const handleLogin = () => {
+    setActiveTab("rubrics");
+  };
 
+  // Compile active checking list
+  const activeRubrics = mceRubrics.filter((r) => settings.selectedRubrics.includes(r.id));
+
+  // Build and Download a highly polished training guide & speaker notes package
+  const handleExportToGoogleSlides = async () => {
     setIsExportingSlides(true);
     setAppError(null);
     setExportUrl(null);
 
     try {
-      const activeRubricsList = mceRubrics.filter((r) => settings.selectedRubrics.includes(r.id));
-      const presentationId = await exportToGoogleSlides(
-        token,
-        settings,
-        selectedThemeId,
-        aiOutline,
-        activeRubricsList
-      );
-      
-      const link = `https://docs.google.com/presentation/d/${presentationId}/edit`;
-      setExportUrl(link);
+      let content = `========================================================================\n`;
+      content += `   MICROSOFT CERTIFIED EDUCATOR (MCE) - 21CLD STUDY GUIDE & EXAM OUTLINE\n`;
+      content += `========================================================================\n\n`;
+      content += `Customized for:   ${settings.presenterName || "MCE Professional Trainer"}\n`;
+      content += `School/Academy:   ${settings.institution || "Dexter Academy"}\n`;
+      content += `Target Focus:     ${settings.trainingFocus || "General Education Classrooms"}\n`;
+      content += `Presentation Tone: ${settings.slideTone || "Professional Academic"}\n`;
+      content += `Active Rubrics:   ${activeRubrics.map((r) => r.title).join(", ")}\n\n`;
+      content += `------------------------------------------------------------------------\n`;
+      content += `  I. SPEAKER SLIDES DECK OUTLINE & PRESENTER NOTES\n`;
+      content += `------------------------------------------------------------------------\n\n`;
+
+      if (aiOutline) {
+        content += `SLIDE 1: COVER SLIDE\n`;
+        content += `--------------------\n`;
+        content += `Title:    ${aiOutline.titleSlide.title}\n`;
+        content += `Subtitle: ${aiOutline.titleSlide.subtitle}\n`;
+        content += `Presenter Notes:\n${aiOutline.titleSlide.notes || ""}\n\n`;
+
+        aiOutline.slides.forEach((sl, idx) => {
+          content += `SLIDE ${idx + 2}: ${sl.title}\n`;
+          content += `--------------------\n`;
+          if (sl.bulletPoints && sl.bulletPoints.length > 0) {
+            content += `Key Concepts:\n`;
+            sl.bulletPoints.forEach((pt) => {
+              content += `  • ${pt}\n`;
+            });
+          } else {
+            content += `Key Concepts: ${sl.header || ""}\n`;
+          }
+          if (sl.activityChallenge) {
+            content += `Interactive 21CLD Challenge:\n  ${sl.activityChallenge}\n`;
+          }
+          if (sl.interactivePrompt) {
+            content += `Audience Reflection Prompt:\n  ${sl.interactivePrompt}\n`;
+          }
+          content += `Presenter/Trainer Notes:\n${sl.notes || ""}\n\n`;
+        });
+      } else {
+        content += `No AI-generation run yet. Run "Customize Presentation" in the portal dashboard to build real-time educator outlines.\n\n`;
+      }
+
+      content += `------------------------------------------------------------------------\n`;
+      content += `  II. DETAILED CURRICULUM RUBRICS STANDARDS (21CLD)\n`;
+      content += `------------------------------------------------------------------------\n\n`;
+
+      activeRubrics.forEach((r) => {
+        content += `RUBRIC: ${r.title.toUpperCase()}\n`;
+        content += `Description: ${r.description}\n\n`;
+        content += `Scoring Guide Levels:\n`;
+        r.levels.forEach((lvl) => {
+          content += `  [Level ${lvl.level}] ${lvl.title}\n`;
+          content += `  Description: ${lvl.description}\n\n`;
+        });
+        content += `---\n\n`;
+      });
+
+      content += `========================================================================\n`;
+      content += `Generated via MCE 21CLD Study Portal. All rights reserved. Keep practicing!\n`;
+      content += `========================================================================\n`;
+
+      // Trigger file download
+      const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `MCE-21CLD-Study-Guide.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      setAiSuccessMessage("Study & Presentation guide exported successfully! File downloaded.");
+      setTimeout(() => setAiSuccessMessage(null), 5000);
     } catch (err: any) {
-      console.error("Slides export failed:", err);
-      setAppError(err.message || "Google Slides export failed. Ensure Google service access is authorized.");
+      console.error("Failed to build study notes:", err);
+      setAppError("Error exporting local Study Guide file.");
     } finally {
       setIsExportingSlides(false);
     }
   };
-
-  // Compile active checking list
-  const activeRubrics = mceRubrics.filter((r) => settings.selectedRubrics.includes(r.id));
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 selection:bg-blue-100 selection:text-blue-900 pb-12 font-sans">
@@ -261,38 +269,33 @@ export default function App() {
               <span className="text-sm font-mono text-blue-400 font-bold">Rubric Analysis</span>
             </div>
 
-            {isIframe && !user && (
-              <button
-                type="button"
-                onClick={() => window.open(window.location.href, "_blank")}
-                className="hidden sm:flex items-center gap-1 bg-slate-800 hover:bg-slate-700 border border-amber-600/40 px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold text-amber-400 group transition-all duration-200 cursor-pointer shadow-xs whitespace-nowrap"
-                title="Google Login is blocked inside iframe previews by browser privacy controls. Click to open in a native tab."
-              >
-                <div className="relative flex h-1.5 w-1.5 mr-0.5 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
+            {user ? (
+              <div id="user-profile-badge" className="flex items-center gap-3 bg-slate-800 border border-slate-700 px-3.5 py-1.5 rounded-xl shadow-xs">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                <div className="flex flex-col items-start leading-tight">
+                  <span className="font-extrabold text-xs text-blue-300 tracking-tight max-w-[150px] truncate block" title={user.displayName}>
+                    {user.displayName || "Participant"}
+                  </span>
+                  <span className="text-[9px] text-slate-400 font-mono">
+                    ID: {user.uid}
+                  </span>
                 </div>
-                <span>Using Frame (Open Tab ↗)</span>
-              </button>
-            )}
-
-            {!user && (
+                <button
+                  onClick={handleLogout}
+                  className="ml-2 text-[9px] bg-red-950/70 hover:bg-red-900 border border-red-900/40 hover:text-white text-red-300 font-bold px-2 py-1 rounded transition-all cursor-pointer"
+                >
+                  Sign Out
+                </button>
+              </div>
+            ) : (
               <button
-                type="button"
-                onClick={handleSandboxBypassLogin}
-                className="flex items-center gap-1.5 bg-slate-900 border border-slate-700 hover:bg-slate-800 hover:border-slate-650 px-3 py-1.5 rounded-lg text-xs font-bold text-amber-550 group transition-all duration-200 cursor-pointer shadow-xs whitespace-nowrap"
-                title="Google login can be blocked by popups or dynamic domains. Click here to use a local sandbox tester account instantly."
+                onClick={() => setActiveTab("rubrics")}
+                className="flex items-center gap-2 bg-slate-850 hover:bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-xl text-slate-350 cursor-pointer text-xs font-bold transition-all"
               >
-                <span>Demo Sandbox Login 🛡️</span>
+                <Key className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+                <span>Register / Enter Code</span>
               </button>
             )}
-
-            <GsiSignInButton
-              onSignIn={handleLogin}
-              onLogout={handleLogout}
-              isLoggingIn={isLoggingIn}
-              user={user}
-            />
           </div>
         </div>
       </header>
@@ -302,39 +305,11 @@ export default function App() {
         
         {/* Error and Success banners */}
         {appError && (
-          <div className="mb-6 bg-red-50 border border-red-200 p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 text-red-800 text-xs shadow-xs animate-in fade-in duration-200">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold">Error encountered:</span> {appError}
-                {appError.includes("Google Authentication") && (
-                  <div className="mt-1.5 text-slate-650 leading-relaxed font-sans">
-                    <p>
-                      💡 <strong>Browser Policy / Domain Authorization Details:</strong> Privacy and security sandboxing blocks auth popups and cookie synchronization inside framing contexts. In addition, dynamically spawned preview environments require explicit manual authorization in Firebase.
-                    </p>
-                    <p className="mt-1 font-bold text-amber-800">
-                      👉 Recommend: Click the button on the right to Open in a New Tab, or use "Demo Sandbox Login" to test everything immediately without any registration configs!
-                    </p>
-                  </div>
-                )}
-              </div>
+          <div className="mb-6 bg-red-50 border border-red-200 p-4 rounded-xl flex items-start gap-3 text-red-800 text-xs shadow-xs animate-in fade-in duration-200">
+            <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold">Error encountered:</span> {appError}
             </div>
-            {appError.includes("Google Authentication") && (
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
-                <button
-                  onClick={handleSandboxBypassLogin}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-amber-400 font-extrabold rounded-lg transition-all shadow-sm cursor-pointer text-center text-xs"
-                >
-                  Demo Sandbox Login 🛡️
-                </button>
-                <button
-                  onClick={() => window.open(window.location.href, "_blank")}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-extrabold rounded-lg transition-all shadow-sm shrink-0 flex items-center justify-center gap-1.5 cursor-pointer text-center text-xs"
-                >
-                  <span>Open in New Tab ↗</span>
-                </button>
-              </div>
-            )}
           </div>
         )}
 
@@ -429,25 +404,46 @@ export default function App() {
                 isGeneratingAI={isGeneratingAI}
                 onExportToSlides={handleExportToGoogleSlides}
                 isExportingSlides={isExportingSlides}
-                userConnected={!needsAuth && !!token}
+                userConnected={!needsAuth && !!user}
                 authButton={
-                  <GsiSignInButton
-                    onSignIn={handleLogin}
-                    onLogout={handleLogout}
-                    isLoggingIn={isLoggingIn}
-                    user={user}
-                  />
+                  user ? (
+                    <div className="w-full text-center py-2.5 bg-slate-50 border border-slate-205 rounded-xl text-xs space-y-1">
+                      <p className="text-slate-400 text-[9px] uppercase tracking-wider font-extrabold">Registered Training Session</p>
+                      <p className="font-mono font-black text-slate-800 tracking-wider text-sm">{user.uid}</p>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("rubrics")}
+                      className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-all text-center uppercase tracking-wider"
+                    >
+                      <Key className="w-4 h-4 text-white" />
+                      <span>Register to Unlock</span>
+                    </button>
+                  )
                 }
               />
             </div>
           </div>
         ) : activeTab === "rubrics" ? (
           <div className="animation-fade-in">
-            <RubricSelector 
-              aiOutline={aiOutline} 
-              user={user} 
-              onLoginRequest={handleLogin} 
-            />
+            {user ? (
+              <RubricSelector 
+                aiOutline={aiOutline} 
+                user={user} 
+                onLoginRequest={handleLogin} 
+              />
+            ) : (
+              <RegistrationGate 
+                onUnlock={(registeredUser) => {
+                  setUser(registeredUser);
+                  setToken("token_" + registeredUser.uid);
+                  setNeedsAuth(false);
+                  setAiSuccessMessage(`Access Granted! Welcome to the Rubrics study Library.`);
+                  setTimeout(() => setAiSuccessMessage(null), 5000);
+                }} 
+              />
+            )}
           </div>
         ) : (
           <div className="animation-fade-in">

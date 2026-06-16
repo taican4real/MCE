@@ -47,6 +47,7 @@ export interface ParticipantScore {
   tabSwitchCount: number;
   antiCheatViolated: boolean;
   updatedAt: any;
+  role?: string;
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
@@ -108,7 +109,8 @@ export async function saveParticipantScore(
   timeUsed: number,
   answeredCount: number,
   tabSwitchCount: number,
-  antiCheatViolated: boolean
+  antiCheatViolated: boolean,
+  role?: string
 ): Promise<void> {
   const localObj: ParticipantScore = {
     uid,
@@ -119,7 +121,8 @@ export async function saveParticipantScore(
     answeredCount,
     tabSwitchCount,
     antiCheatViolated,
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
+    role: role || "participant"
   };
   saveLocalParticipantFallback(localObj);
 
@@ -140,13 +143,43 @@ export async function saveParticipantScore(
       answeredCount,
       tabSwitchCount,
       antiCheatViolated,
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
+      role: role || "participant"
     });
   } catch (error) {
     console.warn("Failing over to local backup persistence for user:", uid, error);
     // If the error seems to be domain-auth or permission, we gracefully recover without crashing clients
     handleFirestoreError(error, OperationType.WRITE, path);
   }
+}
+
+// Function to fetch a single participant record
+export async function fetchParticipant(uid: string): Promise<ParticipantScore | null> {
+  const localBackup = getLocalParticipantsFallback();
+  const localMatch = localBackup.find(p => p.uid === uid);
+
+  try {
+    const docRef = doc(db, "participants", uid);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      return {
+        uid: data.uid,
+        displayName: data.displayName || "",
+        email: data.email || "",
+        score: Number(data.score || 0),
+        timeUsed: Number(data.timeUsed || 0),
+        answeredCount: Number(data.answeredCount || 0),
+        tabSwitchCount: Number(data.tabSwitchCount || 0),
+        antiCheatViolated: Boolean(data.antiCheatViolated || false),
+        updatedAt: data.updatedAt,
+        role: data.role || "participant"
+      };
+    }
+  } catch (error) {
+    console.warn("Firestore fetch single participant failed, trying local fallback:", error);
+  }
+  return localMatch || null;
 }
 
 // Function to fetch all participant records in descending order
@@ -172,7 +205,8 @@ export async function fetchParticipantsList(): Promise<ParticipantScore[]> {
         answeredCount: Number(data.answeredCount),
         tabSwitchCount: Number(data.tabSwitchCount || 0),
         antiCheatViolated: Boolean(data.antiCheatViolated || false),
-        updatedAt: data.updatedAt
+        updatedAt: data.updatedAt,
+        role: data.role || "participant"
       });
     });
 

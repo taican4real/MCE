@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 
 interface AdminDashboardProps {
-  user: User | null;
+  user: any | null;
   onLoginRequest?: () => void;
 }
 
@@ -35,8 +35,13 @@ export default function AdminDashboard({ user, onLoginRequest }: AdminDashboardP
   // To assist in preview if the user logs in with a different testing email
   const [bypassCheck, setBypassCheck] = useState<boolean>(false);
 
+  // Custom non-blocking modal delete state
+  const [confirmDeleteUid, setConfirmDeleteUid] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+
   const adminEmail = "taican4real@gmail.com";
-  const isActualAdmin = user?.email === adminEmail;
+  const isActualAdmin = user?.email === adminEmail || user?.role === "admin";
   const isAuthorized = isActualAdmin || bypassCheck;
 
   const loadData = async () => {
@@ -58,15 +63,24 @@ export default function AdminDashboard({ user, onLoginRequest }: AdminDashboardP
     loadData();
   }, [user]);
 
-  const handleDelete = async (uid: string) => {
-    if (!window.confirm("Are you sure you want to remove this participant's Calibration Score record? This action is permanent.")) return;
+  const triggerDelete = (uid: string) => {
+    setConfirmDeleteUid(uid);
+    setActionError(null);
+    setActionSuccess(null);
+  };
+
+  const executeDelete = async () => {
+    if (!confirmDeleteUid) return;
     try {
-      await deleteParticipantScore(uid);
+      await deleteParticipantScore(confirmDeleteUid);
+      setActionSuccess("Participant calibration record removed from database.");
+      setConfirmDeleteUid(null);
       // Reload lists
       loadData();
+      setTimeout(() => setActionSuccess(null), 4000);
     } catch (err: any) {
       console.error("Failed to delete participant score:", err);
-      alert("Error deleting record. Ensure permissions are correct.");
+      setActionError("Failed to prune score. Check your connection or Firestore write rules.");
     }
   };
 
@@ -112,6 +126,16 @@ export default function AdminDashboard({ user, onLoginRequest }: AdminDashboardP
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/80 shadow-md p-6 lg:p-8">
+      {actionSuccess && (
+        <div className="mb-4 bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-xl text-xs font-semibold animate-in fade-in duration-200">
+          ✅ {actionSuccess}
+        </div>
+      )}
+      {actionError && (
+        <div className="mb-4 bg-rose-50 border border-rose-200 text-rose-800 p-3 rounded-xl text-xs font-semibold animate-in fade-in duration-200">
+          ⚠️ {actionError}
+        </div>
+      )}
       {/* Upper header segment */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-5 border-b border-slate-100">
         <div className="flex items-center gap-3">
@@ -167,23 +191,22 @@ export default function AdminDashboard({ user, onLoginRequest }: AdminDashboardP
           </div>
           <div className="space-y-2">
             <h3 className="text-sm font-extrabold text-slate-900">
-              Access Restricted to Administrators Only
+              Access Restricted to Authorized Trainers
             </h3>
             <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
-              This panel is locked to account administrator <strong>{adminEmail}</strong>. 
-              Please connect your Google Account using standard credentials.
+              This panel is secure. To enter, please register as a participant with your trainer email <strong>{adminEmail}</strong> or enter your unique administrator Access Code.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2.5 justify-center pt-2">
             {onLoginRequest ? (
               <button
                 onClick={onLoginRequest}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-extrabold transition-all cursor-pointer uppercase tracking-wider"
               >
-                Log In with Google
+                Register / Enter Access Code
               </button>
             ) : (
-              <span className="text-xs text-slate-400">Please utilize the header login controls.</span>
+              <span className="text-xs text-slate-400">Please use the Rubrics Library tab to register.</span>
             )}
             <button
               onClick={() => setBypassCheck(true)}
@@ -326,8 +349,14 @@ export default function AdminDashboard({ user, onLoginRequest }: AdminDashboardP
                             <tr key={p.uid} className="hover:bg-slate-50/50 transition-colors text-xs font-sans">
                               <td className="py-3.5 px-4">
                                 <div className="flex flex-col">
-                                  <span className="font-extrabold text-slate-900 flex items-center gap-1.5">
+                                  <span className="font-extrabold text-slate-900 flex items-center gap-1.5 flex-wrap">
                                     {p.displayName}
+                                    {p.role === "admin" && (
+                                      <span className="text-[8px] bg-amber-50 border border-amber-200 text-amber-800 font-extrabold px-1.5 py-0.2 rounded uppercase font-mono">Admin</span>
+                                    )}
+                                    {p.role === "participant" && (
+                                      <span className="text-[8px] bg-sky-50 border border-sky-150 text-sky-700 font-extrabold px-1.5 py-0.2 rounded uppercase font-mono">Participant</span>
+                                    )}
                                     {index === 0 && searchQuery === "" && (
                                       <span className="text-[8px] bg-blue-105 border border-blue-200 text-blue-700 font-extrabold px-1.5 py-0.2 rounded uppercase font-mono">Top Score</span>
                                     )}
@@ -371,7 +400,7 @@ export default function AdminDashboard({ user, onLoginRequest }: AdminDashboardP
                               <td className="py-3.5 px-4 text-right">
                                 <button
                                   type="button"
-                                  onClick={() => handleDelete(p.uid)}
+                                  onClick={() => triggerDelete(p.uid)}
                                   className="p-1 px-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all border border-transparent hover:border-rose-100 cursor-pointer inline-flex items-center mt-0.5"
                                   title="Prune evaluation score record"
                                 >
@@ -466,6 +495,50 @@ export default function AdminDashboard({ user, onLoginRequest }: AdminDashboardP
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Custom confirm deletion overlay */}
+      {confirmDeleteUid && (
+        <div id="delete-confirm-overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-sm w-full p-6 space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="flex gap-3">
+              <div className="w-10 h-10 bg-rose-50 text-rose-600 border border-rose-100 rounded-lg flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-extrabold text-slate-900 uppercase">Delete Participant Record?</h3>
+                <p className="text-xs text-slate-550 leading-relaxed">
+                  Permanently erase calibration score record. This action is irreversible on the Firestore database.
+                </p>
+                <div className="p-2 py-1.5 bg-slate-50 border border-slate-150 rounded-lg text-[10px] font-mono text-slate-600 mt-2 font-bold leading-normal truncate">
+                  UID: <span className="text-slate-900">{confirmDeleteUid}</span>
+                  {participants.find(p => p.uid === confirmDeleteUid) && (
+                    <div className="mt-0.5 whitespace-nowrap truncate">
+                      Name: <span className="text-slate-900">{participants.find(p => p.uid === confirmDeleteUid)?.displayName}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteUid(null)}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] font-bold transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={executeDelete}
+                className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[11px] font-extrabold transition-all cursor-pointer shadow-3xs uppercase tracking-wider"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}

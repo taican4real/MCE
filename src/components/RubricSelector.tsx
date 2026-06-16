@@ -1261,7 +1261,7 @@ export default function RubricSelector({ aiOutline, user, onLoginRequest }: Rubr
                     <div className="mt-4 p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-[10.5px] text-emerald-900 text-left flex items-start gap-2 font-sans leading-relaxed">
                       <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                       <div>
-                        Logged in as <strong>{user.email}</strong>. This score has been posted to the calibration leaderboard successfully!
+                        Registered as <strong>{user.displayName || user.email}</strong>. This score has been posted under Access Code: <strong className="font-mono text-blue-700">{user.uid}</strong> to the calibration leaderboard successfully!
                       </div>
                     </div>
                   )}
