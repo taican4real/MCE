@@ -41,6 +41,8 @@ export default function App() {
   const [aiSuccessMessage, setAiSuccessMessage] = useState<string | null>(null);
 
   // Initial Auth hook
+  const isIframe = typeof window !== "undefined" && window.self !== window.top;
+
   useEffect(() => {
     // Check if user is signed in on load
     const unsubscribe = initAuth(
@@ -70,7 +72,11 @@ export default function App() {
       }
     } catch (err: any) {
       console.error("Authentication failed:", err);
-      setAppError("Google Authentication failed. Please check your network and pop-up blocker.");
+      if (isIframe) {
+        setAppError("Google Authentication failed. Because this app is running in an iframe preview, browsers block popup sign-ins & third-party cookies by default. Click 'Open in New Tab' to sign in instantly.");
+      } else {
+        setAppError("Google Authentication failed. Please check your network and pop-up blocker.");
+      }
     } finally {
       setIsLoggingIn(false);
     }
@@ -212,6 +218,21 @@ export default function App() {
               <span className="text-sm font-mono text-blue-400 font-bold">Rubric Analysis</span>
             </div>
 
+            {isIframe && !user && (
+              <button
+                type="button"
+                onClick={() => window.open(window.location.href, "_blank")}
+                className="hidden sm:flex items-center gap-1 bg-slate-800 hover:bg-slate-700 border border-amber-600/40 px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold text-amber-400 group transition-all duration-200 cursor-pointer shadow-xs whitespace-nowrap"
+                title="Google Login is blocked inside iframe previews by browser privacy controls. Click to open in a native tab."
+              >
+                <div className="relative flex h-1.5 w-1.5 mr-0.5 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
+                </div>
+                <span>Using Frame (Open Tab ↗)</span>
+              </button>
+            )}
+
             <GsiSignInButton
               onSignIn={handleLogin}
               onLogout={handleLogout}
@@ -227,11 +248,26 @@ export default function App() {
         
         {/* Error and Success banners */}
         {appError && (
-          <div className="mb-6 bg-red-50 border border-red-200 p-4 rounded-xl flex items-start gap-3 text-red-800 text-xs">
-            <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-bold">Error encountered:</span> {appError}
+          <div className="mb-6 bg-red-50 border border-red-200 p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 text-red-800 text-xs shadow-xs animate-in fade-in duration-200">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">Error encountered:</span> {appError}
+                {appError.includes("Google Authentication") && (
+                  <p className="mt-1.5 text-slate-600 leading-relaxed font-sans">
+                    💡 <strong>Browser Policy Details:</strong> Privacy and security sandboxing blocks authentication popups and cookie synchronization when a site is loaded inside a mock framework frame (like this preview pane). Clicking the <strong>Open in New Tab</strong> button launches this app directly in its own window where Google Sign-In is completely unrestricted.
+                  </p>
+                )}
+              </div>
             </div>
+            {appError.includes("Google Authentication") && (
+              <button
+                onClick={() => window.open(window.location.href, "_blank")}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-extrabold rounded-lg transition-all shadow-sm shrink-0 flex items-center gap-1.5 self-start md:self-center cursor-pointer text-center"
+              >
+                <span>Open in New Tab ↗</span>
+              </button>
+            )}
           </div>
         )}
 
