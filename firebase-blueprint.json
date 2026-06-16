@@ -1,0 +1,47 @@
+{
+  "entities": {
+    "Participant": {
+      "title": "Participant",
+      "description": "A student or training participant who completed the 21CLD MCE Calibration Challenge.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The Google User ID."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User's full name or greeting handle."
+        },
+        "email": {
+          "type": "string",
+          "description": "Verified Google email address."
+        },
+        "score": {
+          "type": "integer",
+          "description": "The final calibration score out of 1000 points."
+        },
+        "timeUsed": {
+          "type": "integer",
+          "description": "Duration in seconds taken to complete the exam."
+        },
+        "answeredCount": {
+          "type": "integer",
+          "description": "The number of answered cases."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of completion."
+        }
+      },
+      "required": ["uid", "displayName", "email", "score", "timeUsed", "answeredCount", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/participants/{participantId}": {
+      "schema": "Participant",
+      "description": "Persistent record of calibration challenge score for leaderboard and administrative dashboards."
+    }
+  }
+}

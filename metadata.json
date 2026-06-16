@@ -1,0 +1,8 @@
+{
+  "name": "MCE Rubric Slides Generator",
+  "description": "Interactive MCE rubric visualizer and customized training slide maker with live Google Slides export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
